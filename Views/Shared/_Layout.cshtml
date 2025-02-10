@@ -67,8 +67,18 @@
     @await RenderSectionAsync("Scripts", required: false)
     <script>
         const monthPicker = document.getElementById('monthPicker');
-            const today = new Date();
-            monthPicker.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+        const currentYear = @(ViewData["year"] ?? DateTime.Now.Year);
+        const currentMonth = @(ViewData["month"] ?? DateTime.Now.Month);
+
+        monthPicker.value = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+
+        monthPicker.addEventListener('change', function () {
+            const selectedDate = new Date(monthPicker.value);
+            const year = selectedDate.getFullYear();
+            const month = String(selectedDate.getMonth() + 1).padStart(2, '0'); // Month is 0-indexed
+
+            window.location.href = `/Criteria/Index?year=${year}&month=${month}`;
+        });
     </script>
 
 </body>

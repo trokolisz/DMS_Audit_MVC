@@ -20,11 +20,23 @@ namespace DMS_Audit_MVC.Controllers
             _context = context;
         }
 
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(short? year, byte? month)
         {
-            // Get the current year and month
-            short currentYear = (short)DateTime.Now.Year;
-            byte currentMonth = (byte)DateTime.Now.Month;
+            // Get the current year and month if year and month are not provided
+            short currentYear = year ?? (short)DateTime.Now.Year;
+            byte currentMonth = month ?? (byte)DateTime.Now.Month;
+
+            // Check if the requested month is in the future
+            DateTime requestedDate = new DateTime(currentYear, currentMonth, 1);
+            if (requestedDate > DateTime.Now)
+            {
+                // Redirect to the current month
+                return RedirectToAction(nameof(Index));
+            }
+
+            // Pass the year and month to the ViewData
+            ViewData["year"] = currentYear;
+            ViewData["month"] = currentMonth;
 
             // Fetch all criteria
             var criteriaList = await _context.Criterias.ToListAsync();
@@ -40,19 +52,50 @@ namespace DMS_Audit_MVC.Controllers
                                                  cs.Year == currentYear &&
                                                  cs.Month == currentMonth);
 
-                // If no CriteriaState exists for the current month, create a default one
+                // If no CriteriaState exists for the current month
                 if (criteriaState == null)
                 {
-                    criteriaState = new CriteriaState
+                    // Try to copy the previous CriteriaState
+                    var previousCriteriaState = await _context.CriteriaStates
+                        .Where(cs => cs.CriteriaID == criteria.ID && cs.Year < currentYear || (cs.Year == currentYear && cs.Month < currentMonth))
+                        .OrderByDescending(cs => cs.Year)
+                        .ThenByDescending(cs => cs.Month)
+                        .FirstOrDefaultAsync();
+
+                    if (previousCriteriaState != null)
                     {
-                        CriteriaID = criteria.ID,
-                        Criteria = criteria, // Assign the Criteria object
-                        Year = currentYear,
-                        Month = currentMonth,
-                        CurrentLvl = 0, // Set default value
-                        Progress = 0f,   // Set default value
-                        // Set other default values as needed
-                    };
+                        criteriaState = new CriteriaState
+                        {
+                            CriteriaID = criteria.ID,
+                            Criteria = criteria, // Assign the Criteria object
+                            Year = currentYear,
+                            Month = currentMonth,
+                            CurrentLvl = previousCriteriaState.CurrentLvl,
+                            Progress = previousCriteriaState.Progress,
+                            Comment = previousCriteriaState.Comment,
+                            ClosingComment = previousCriteriaState.ClosingComment,
+                            Closed = false,
+                            ModifiedDate = null,
+                            ModifiedBy = null,
+                            ClosedDate = null,
+                            ClosedBy = null
+                        };
+                    }
+                    else
+                    {
+                        // Create a default CriteriaState
+                        criteriaState = new CriteriaState
+                        {
+                            CriteriaID = criteria.ID,
+                            Criteria = criteria, // Assign the Criteria object
+                            Year = currentYear,
+                            Month = currentMonth,
+                            CurrentLvl = 0, // Set default value
+                            Progress = 0f,   // Set default value
+                            // Set other default values as needed
+                        };
+                    }
+
                     _context.CriteriaStates.Add(criteriaState); // Add the new entity to the context
                     await _context.SaveChangesAsync(); // Save changes to the database
                 }
